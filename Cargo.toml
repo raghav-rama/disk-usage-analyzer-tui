@@ -1,0 +1,16 @@
+[package]
+name = "disk-usage-tui"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = "1.0"
+clap = { version = "4.5", features = ["derive"] }
+crossterm = "0.26"
+humansize = "2.1"
+ignore = "0.4"
+indicatif = "0.17"
+num_cpus = "1.16"
+rayon = "1.8"
+tui = "0.19"
+walkdir = "2.4"
