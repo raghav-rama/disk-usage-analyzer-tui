@@ -3,7 +3,7 @@ name: Release
 on:
   push:
     tags:
-      - 'v*'  # Trigger on tags like v1.0.0
+      - "v*" # Trigger on tags like v1.0.0
 
 env:
   CARGO_TERM_COLOR: always
@@ -52,7 +52,6 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cargo-
 
-
       - name: Build release binary
         shell: bash
         run: |
@@ -65,7 +64,7 @@ jobs:
           fi
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: disk-usage-tui-${{ matrix.artifact }}
           path: release/disk-usage-tui-*
@@ -89,7 +88,7 @@ jobs:
           name: Release ${{ github.ref_name }}
           body: |
             Disk Usage TUI Analyzer ${{ github.ref_name }}
-            
+
             ### Assets
             - `disk-usage-tui-linux-x86_64` - Linux x86_64
             - `disk-usage-tui-apple-aarch64` - macOS (Apple Silicon)
