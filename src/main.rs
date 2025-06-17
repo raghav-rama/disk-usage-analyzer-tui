@@ -14,7 +14,7 @@
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use clap::{arg, command, Parser};
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode},
@@ -27,8 +27,10 @@ use indicatif::{ProgressBar, ProgressStyle};
 use rayon::prelude::*;
 use tui::{
     backend::CrosstermBackend,
-    widgets::{Block, Borders, Row, Table, TableState},
-    Terminal,
+    layout::{Constraint, Direction, Layout},
+    style::{Color, Modifier, Style},
+    widgets::{Block, Borders, Cell, Paragraph, Row, Table, TableState},
+    Frame, Terminal,
 };
 
 #[derive(Parser, Debug)]
@@ -71,7 +73,7 @@ fn main() -> Result<()> {
     Ok(())
 }
 
-fn build_tree(root: &Path, follow_symlinks: bool, pb: &ProgressBar) -> Result<DirEntryInfo> {
+fn build_tree(root: &Path, follow_symlinks: bool, _pb: &ProgressBar) -> Result<DirEntryInfo> {
     let mut entries: Vec<(PathBuf, u64, bool)> = WalkBuilder::new(root)
         .follow_links(follow_symlinks)
         .hidden(false)
@@ -135,6 +137,119 @@ fn build_tree(root: &Path, follow_symlinks: bool, pb: &ProgressBar) -> Result<Di
     Ok(root_node)
 }
 
+#[derive(PartialEq)]
+enum SortBy {
+    Name,
+    Size,
+}
+
+impl Default for SortBy {
+    fn default() -> Self {
+        SortBy::Size
+    }
+}
+
+fn draw_ui<B: tui::backend::Backend>(
+    f: &mut Frame<B>,
+    state: &mut TableState,
+    stack: &[(DirEntryInfo, usize)],
+    sort_by: &SortBy,
+) {
+    let (node, _) = stack.last().unwrap();
+
+    // Sort children based on current sort criteria
+    let mut children = node.children.clone();
+    match sort_by {
+        SortBy::Name => children.sort_by(|a, b| a.path.file_name().cmp(&b.path.file_name())),
+        SortBy::Size => children.sort_by(|a, b| b.size.cmp(&a.size)),
+    }
+
+    // Calculate file and directory counts
+    let (file_count, dir_count) = children.iter().fold((0, 0), |(files, dirs), child| {
+        if child.is_dir {
+            (files, dirs + 1)
+        } else {
+            (files + 1, dirs)
+        }
+    });
+
+    // Create layout
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .margin(1)
+        .constraints(
+            [
+                Constraint::Length(3),
+                Constraint::Min(10),
+                Constraint::Length(3),
+            ]
+            .as_ref(),
+        )
+        .split(f.size());
+
+    // Draw header
+    let header = Block::default()
+        .borders(Borders::ALL)
+        .title(" Disk Usage Analyzer (q to quit)");
+    let current_path = node.path.display().to_string();
+    let path_text = Paragraph::new(current_path).block(Block::default().borders(Borders::BOTTOM));
+    f.render_widget(header, chunks[0]);
+    f.render_widget(path_text, chunks[0]);
+
+    // Draw table
+    let header_cells = ["Name", "Size"]
+        .iter()
+        .map(|h| Cell::from(*h).style(Style::default().add_modifier(Modifier::BOLD)));
+    let header = Row::new(header_cells)
+        .style(Style::default().add_modifier(Modifier::REVERSED))
+        .bottom_margin(1);
+
+    let rows = children.iter().enumerate().map(|(i, child)| {
+        let is_selected = state.selected() == Some(i);
+        let style = if is_selected {
+            Style::default().add_modifier(Modifier::REVERSED)
+        } else {
+            Style::default()
+        };
+
+        let name = child
+            .path
+            .file_name()
+            .map(|s| s.to_string_lossy().to_string())
+            .unwrap_or_else(|| "/".to_string());
+
+        let name_style = if child.is_dir {
+            Style::default()
+                .fg(Color::Blue)
+                .add_modifier(Modifier::BOLD)
+        } else {
+            Style::default()
+        };
+
+        Row::new(vec![name, format_size(child.size, DECIMAL)])
+            .style(style)
+            .style(name_style)
+    });
+
+    let table = Table::new(rows)
+        .header(header)
+        .block(Block::default().borders(Borders::ALL))
+        .highlight_style(Style::default().add_modifier(Modifier::BOLD))
+        .widths(&[Constraint::Percentage(70), Constraint::Percentage(30)]);
+
+    f.render_stateful_widget(table, chunks[1], state);
+
+    // Draw status bar
+    let status = format!(
+        "↑/↓: Navigate | Enter: Open | ←: Go Back | s: Toggle Sort | Files: {} | Dirs: {} | Total: {}",
+        file_count,
+        dir_count,
+        format_size(node.size, DECIMAL)
+    );
+    let status_bar = Paragraph::new(status).block(Block::default().borders(Borders::ALL));
+    f.render_widget(status_bar, chunks[2]);
+}
+
 fn run_tui(root: DirEntryInfo) -> Result<()> {
     enable_raw_mode()?;
     let mut stdout = std::io::stdout();
@@ -144,51 +259,45 @@ fn run_tui(root: DirEntryInfo) -> Result<()> {
 
     let mut state = TableState::default();
     let mut stack: Vec<(DirEntryInfo, usize)> = vec![(root, 0)];
+    let mut sort_by = SortBy::default();
+
+    // Initial draw
+    terminal.clear()?;
 
     loop {
         terminal.draw(|f| {
-            let (node, _) = stack.last().unwrap();
-            let rows: Vec<Row> = node
-                .children
-                .iter()
-                .map(|child| {
-                    Row::new(vec![
-                        child
-                            .path
-                            .file_name()
-                            .map(|s| s.to_string_lossy().to_string())
-                            .unwrap_or_else(|| "/".to_string()),
-                        format_size(child.size, DECIMAL),
-                    ])
-                })
-                .collect();
-            let table = Table::new(rows)
-                .header(Row::new(vec!["Name", "Size"]).bottom_margin(1))
-                .block(
-                    Block::default()
-                        .title(node.path.display().to_string())
-                        .borders(Borders::ALL),
-                )
-                .widths(&[
-                    tui::layout::Constraint::Percentage(70),
-                    tui::layout::Constraint::Percentage(30),
-                ]);
-            f.render_stateful_widget(table, f.size(), &mut state);
+            draw_ui(f, &mut state, &stack, &sort_by);
         })?;
 
         if crossterm::event::poll(Duration::from_millis(100))? {
             match event::read()? {
                 Event::Key(key) => match key.code {
                     KeyCode::Char('q') => break,
-                    KeyCode::Down => state.select(Some(match state.selected() {
-                        Some(i) if i + 1 < stack.last().unwrap().0.children.len() => i + 1,
-                        _ => 0,
-                    })),
-                    KeyCode::Up => state.select(Some(match state.selected() {
-                        Some(i) if i > 0 => i - 1,
-                        _ => stack.last().unwrap().0.children.len() - 1,
-                    })),
-                    KeyCode::Enter => {
+                    KeyCode::Char('s') => {
+                        sort_by = match sort_by {
+                            SortBy::Name => SortBy::Size,
+                            SortBy::Size => SortBy::Name,
+                        };
+                    }
+                    KeyCode::Down | KeyCode::Char('j') => {
+                        let len = stack.last().unwrap().0.children.len();
+                        if len > 0 {
+                            state.select(Some(match state.selected() {
+                                Some(i) if i + 1 < len => i + 1,
+                                _ => 0,
+                            }));
+                        }
+                    }
+                    KeyCode::Up | KeyCode::Char('k') => {
+                        let len = stack.last().unwrap().0.children.len();
+                        if len > 0 {
+                            state.select(Some(match state.selected() {
+                                Some(i) if i > 0 => i - 1,
+                                _ => len - 1,
+                            }));
+                        }
+                    }
+                    KeyCode::Right | KeyCode::Enter => {
                         if let Some(sel) = state.selected() {
                             let node = &stack.last().unwrap().0.children[sel];
                             if node.is_dir && !node.children.is_empty() {
@@ -197,7 +306,7 @@ fn run_tui(root: DirEntryInfo) -> Result<()> {
                             }
                         }
                     }
-                    KeyCode::Backspace => {
+                    KeyCode::Left | KeyCode::Backspace => {
                         if stack.len() > 1 {
                             stack.pop();
                             state = TableState::default();
@@ -210,6 +319,7 @@ fn run_tui(root: DirEntryInfo) -> Result<()> {
         }
     }
 
+    // Clean up
     disable_raw_mode()?;
     execute!(
         terminal.backend_mut(),
