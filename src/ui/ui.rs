@@ -7,10 +7,7 @@ use tui::{
     Frame,
 };
 
-use crate::{
-    core::DirEntryInfo,
-    ui::app::{App, SortBy},
-};
+use crate::ui::app::App;
 
 pub fn draw_ui<B: Backend>(f: &mut Frame<B>, app: &App) {
     let chunks = Layout::default()
@@ -35,10 +32,10 @@ fn draw_header<B: Backend>(f: &mut Frame<B>, area: Rect, current_path: &std::pat
     let header = Block::default()
         .borders(Borders::ALL)
         .title(" Disk Usage Analyzer (q to quit)");
-    
+
     let path_text = Paragraph::new(current_path.display().to_string())
         .block(Block::default().borders(Borders::BOTTOM));
-    
+
     f.render_widget(header, area);
     f.render_widget(path_text, area);
 }
@@ -47,7 +44,7 @@ fn draw_file_list<B: Backend>(f: &mut Frame<B>, area: Rect, app: &App) {
     let header_cells = ["Name", "Size"]
         .iter()
         .map(|h| Cell::from(*h).style(Style::default().add_modifier(Modifier::BOLD)));
-    
+
     let header = Row::new(header_cells)
         .style(Style::default().add_modifier(Modifier::REVERSED))
         .bottom_margin(1);
@@ -70,7 +67,7 @@ fn draw_file_list<B: Backend>(f: &mut Frame<B>, area: Rect, app: &App) {
                 .file_name()
                 .map(|s| s.to_string_lossy().to_string())
                 .unwrap_or_else(|| "/".to_string());
-            
+
             let name_style = if child.is_dir {
                 Style::default()
                     .fg(Color::Blue)
@@ -79,9 +76,12 @@ fn draw_file_list<B: Backend>(f: &mut Frame<B>, area: Rect, app: &App) {
                 Style::default()
             };
 
-            Row::new(vec![name, humansize::format_size(child.size, humansize::DECIMAL)])
-                .style(style)
-                .style(name_style)
+            Row::new(vec![
+                name,
+                humansize::format_size(child.size, humansize::DECIMAL),
+            ])
+            .style(style)
+            .style(name_style)
         })
         .collect();
 
@@ -97,13 +97,17 @@ fn draw_file_list<B: Backend>(f: &mut Frame<B>, area: Rect, app: &App) {
 }
 
 fn draw_status_bar<B: Backend>(f: &mut Frame<B>, area: Rect, app: &App) {
-    let (file_count, dir_count) = app.current_node.children.iter().fold((0, 0), |(files, dirs), child| {
-        if child.is_dir {
-            (files, dirs + 1)
-        } else {
-            (files + 1, dirs)
-        }
-    });
+    let (file_count, dir_count) =
+        app.current_node
+            .children
+            .iter()
+            .fold((0, 0), |(files, dirs), child| {
+                if child.is_dir {
+                    (files, dirs + 1)
+                } else {
+                    (files + 1, dirs)
+                }
+            });
 
     let status = format!(
         "↑/k/↓/j: Navigate | →/Enter: Open | ←/Backspace: Go Back | s: Toggle Sort | Files: {} | Dirs: {} | Total: {}",
@@ -111,9 +115,9 @@ fn draw_status_bar<B: Backend>(f: &mut Frame<B>, area: Rect, app: &App) {
         dir_count,
         humansize::format_size(app.current_node.size, humansize::DECIMAL)
     );
-    
-    let status_bar = Paragraph::new(Span::raw(status))
-        .block(Block::default().borders(Borders::ALL));
-    
+
+    let status_bar =
+        Paragraph::new(Span::raw(status)).block(Block::default().borders(Borders::ALL));
+
     f.render_widget(status_bar, area);
 }

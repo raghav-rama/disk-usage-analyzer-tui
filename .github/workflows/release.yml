@@ -105,6 +105,6 @@ jobs:
           draft: false
           prerelease: false
           files: |
-            artifacts/disk-usage-tui-linux-x86_64/disk-usage-tui-linux-x86_64
-            artifacts/disk-usage-tui-macos-aarch64/disk-usage-tui-macos-aarch64
-            artifacts/disk-usage-tui-windows-x86_64.exe/disk-usage-tui-windows-x86_64.exe
+            artifacts/disk-usage-tui-linux-x86_64
+            artifacts/disk-usage-tui-macos-aarch64
+            artifacts/disk-usage-tui-windows-x86_64.exe
