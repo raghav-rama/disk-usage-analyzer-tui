@@ -1,5 +1,4 @@
 use std::path::{Path, PathBuf};
-use std::time::Duration;
 
 use ignore::WalkBuilder;
 use indicatif::ProgressBar;
@@ -13,7 +12,11 @@ pub struct DirEntryInfo {
     pub children: Vec<DirEntryInfo>,
 }
 
-pub fn build_tree(root: &Path, follow_symlinks: bool, _pb: &ProgressBar) -> std::io::Result<DirEntryInfo> {
+pub fn build_tree(
+    root: &Path,
+    follow_symlinks: bool,
+    _pb: &ProgressBar,
+) -> std::io::Result<DirEntryInfo> {
     let mut entries: Vec<(PathBuf, u64, bool)> = WalkBuilder::new(root)
         .follow_links(follow_symlinks)
         .hidden(false)

@@ -7,14 +7,11 @@ use std::time::Duration;
 use anyhow::Result;
 use clap::{arg, command, Parser};
 use crossterm::{
-    event::{DisableMouseCapture, EnableMouseCapture, Event as CEvent, KeyCode},
+    event::{DisableMouseCapture, EnableMouseCapture},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use tui::{
-    backend::CrosstermBackend,
-    Terminal,
-};
+use tui::{backend::CrosstermBackend, Terminal};
 
 use crate::{
     core::build_tree,

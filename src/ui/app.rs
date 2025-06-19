@@ -1,5 +1,3 @@
-use std::path::PathBuf;
-
 use crate::core::DirEntryInfo;
 
 #[derive(PartialEq, Clone, Copy)]
@@ -86,7 +84,10 @@ impl App {
                 .current_node
                 .children
                 .sort_by(|a, b| a.path.file_name().cmp(&b.path.file_name())),
-            SortBy::Size => self.current_node.children.sort_by(|a, b| b.size.cmp(&a.size)),
+            SortBy::Size => self
+                .current_node
+                .children
+                .sort_by(|a, b| b.size.cmp(&a.size)),
         }
     }
 }
